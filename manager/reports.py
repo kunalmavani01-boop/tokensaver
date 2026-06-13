@@ -152,7 +152,6 @@ def get_dashboard_stats():
             at_risk += 1
     
     # Chart data (last 7 days)
-    from datetime import timedelta
     chart_days = []
     chart_costs = []
     today = datetime.now(timezone.utc).date()
