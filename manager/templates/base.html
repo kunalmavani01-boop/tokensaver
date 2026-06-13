@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TokenSaver{% block title %} - Dashboard{% endblock %}</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f172a; color: #e2e8f0; display: flex; min-height: 100vh;
+}
+.sidebar {
+  width: 220px; background: #1e293b; padding: 24px 0;
+  border-right: 1px solid #334155; display: flex; flex-direction: column;
+}
+.sidebar h2 { color: #22c55e; font-size: 20px; padding: 0 20px 24px; border-bottom: 1px solid #334155; margin-bottom: 16px; }
+.sidebar h2 span { color: #e2e8f0; }
+.sidebar a {
+  display: block; padding: 10px 20px; color: #94a3b8; text-decoration: none;
+  font-size: 14px; transition: all 0.2s;
+}
+.sidebar a:hover { background: #0f172a; color: #22c55e; }
+.sidebar a.active { background: #0f172a; color: #22c55e; border-left: 3px solid #22c55e; }
+.sidebar .badge { font-size: 11px; color: #64748b; padding: 20px 20px 0; margin-top: auto; }
+.main { flex: 1; padding: 24px 32px; overflow-y: auto; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.header h1 { font-size: 24px; font-weight: 700; }
+.status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.status-dot.online { background: #22c55e; }
+.status-dot.offline { background: #ef4444; }
+.card {
+  background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px;
+  transition: border-color 0.2s;
+}
+.card:hover { border-color: #22c55e; }
+.card-label { font-size: 13px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.card-value { font-size: 28px; font-weight: 700; }
+.card-value.green { color: #22c55e; }
+.card-value.blue { color: #3b82f6; }
+.card-value.yellow { color: #eab308; }
+.card-value.purple { color: #a855f7; }
+.card-value.red { color: #ef4444; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.btn {
+  display: inline-block; padding: 8px 20px; border-radius: 8px; font-size: 14px;
+  font-weight: 600; cursor: pointer; border: none; text-decoration: none;
+}
+.btn-primary { background: #22c55e; color: #fff; }
+.btn-primary:hover { background: #16a34a; }
+.btn-danger { background: #ef4444; color: #fff; }
+.btn-sm { padding: 4px 12px; font-size: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: #64748b; padding: 10px 12px; border-bottom: 1px solid #334155; font-weight: 600; }
+td { padding: 10px 12px; border-bottom: 1px solid #1e293b; }
+tr:hover td { background: #0f172a; }
+input, select {
+  background: #0f172a; border: 1px solid #334155; border-radius: 6px;
+  color: #e2e8f0; padding: 8px 12px; font-size: 14px; width: 100%;
+}
+input:focus, select:focus { outline: none; border-color: #22c55e; }
+label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 4px; }
+.form-group { margin-bottom: 16px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.alert-success { background: #166534; color: #86efac; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+.alert-error { background: #7f1d1d; color: #fca5a5; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+.empty-state { text-align: center; padding: 48px; color: #64748b; }
+.empty-state h3 { font-size: 18px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <h2>Token<span>Saver</span></h2>
+  <a href="/manager/" class="{% if active_page == 'overview' %}active{% endif %}">Overview</a>
+  <a href="/manager/users" class="{% if active_page == 'users' %}active{% endif %}">Users</a>
+  <a href="/manager/teams" class="{% if active_page == 'teams' %}active{% endif %}">Teams</a>
+  <a href="/manager/budgets" class="{% if active_page == 'budgets' %}active{% endif %}">Budgets</a>
+  <a href="/manager/models" class="{% if active_page == 'models' %}active{% endif %}">Models</a>
+  <a href="/manager/alerts" class="{% if active_page == 'alerts' %}active{% endif %}">Alerts</a>
+  <a href="/manager/reports" class="{% if active_page == 'reports' %}active{% endif %}">Reports</a>
+  <a href="/manager/proxy" class="{% if active_page == 'proxy' %}active{% endif %}">Caching Proxy</a>
+  <a href="/manager/settings" class="{% if active_page == 'settings' %}active{% endif %}">Settings</a>
+  <div class="badge">
+    {% if standalone_mode %}<span style="color:#3b82f6;">Standalone</span> · {% endif %}
+    {% if license_tier == 'enterprise' %}Enterprise
+    {% elif license_valid %}Pro
+    {% else %}Free (max {{ license_max_users }} users)
+    {% endif %}
+  </div>
+</div>
+<div class="main">
+  <div class="header">
+    <h1>{% block heading %}Dashboard{% endblock %}</h1>
+    <div>
+      {% block header_right %}{% endblock %}
+    </div>
+  </div>
+  {% if flash_message %}
+  <div class="alert-{{ flash_type or 'success' }}">{{ flash_message }}</div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

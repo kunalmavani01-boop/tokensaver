@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Users{% endblock %}
+{% block heading %}Users{% endblock %}
+
+{% block header_right %}
+<button class="btn btn-primary btn-sm" onclick="document.getElementById('createForm').style.display='block'">+ Add User</button>
+{% endblock %}
+
+{% block content %}
+<div id="createForm" style="display:none;margin-bottom:24px;">
+  <div class="card">
+    <div class="card-label" style="margin-bottom:16px;">New User</div>
+    <form method="POST" action="/manager/users/create">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" name="name" required placeholder="John Doe">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" name="email" required placeholder="john@example.com">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Monthly Budget</label>
+          <input type="number" name="monthly_budget" value="100" step="10">
+        </div>
+        <div class="form-group">
+          <label>Team</label>
+          <select name="team_id">
+            <option value="">No team</option>
+            {% for t in teams %}
+            <option value="{{ t.id }}">{{ t.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">Create User</button>
+      <button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById('createForm').style.display='none'">Cancel</button>
+    </form>
+  </div>
+</div>
+
+{% if users %}
+<div class="card">
+  <table>
+    <thead><tr><th>Name</th><th>Email</th><th>Team</th><th>Budget</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.name }}</td>
+        <td>{{ u.email }}</td>
+        <td>{{ u.team_id if u.team_id else '—' }}</td>
+        <td>₹{{ "%.0f"|format(u.monthly_budget) }}</td>
+        <td><span class="status-dot {{ 'online' if u.is_active else 'offline' }}"></span>{{ 'Active' if u.is_active else 'Inactive' }}</td>
+        <td>
+          <form method="POST" action="/manager/users/{{ u.id }}/delete" style="display:inline;">
+            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Delete user and all their data?')">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state"><h3>No users yet</h3><p>Add your first user to start tracking per-person spend.</p></div>
+{% endif %}
+{% endblock %}

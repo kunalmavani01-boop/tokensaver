@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block heading %}Settings{% endblock %}
+
+{% block content %}
+<div class="grid">
+  <div class="card">
+    <div class="card-label">License Key</div>
+    {% if license_valid %}
+    <div style="font-size:14px;color:#86efac;margin-bottom:4px;">
+      {% if license_tier == 'enterprise' %}Enterprise{% else %}Pro{% endif %} license active
+    </div>
+    <div style="font-size:12px;color:#64748b;margin-bottom:16px;">
+      {{ license_email }} &middot; Max {{ license_max_users }} users
+    </div>
+    {% else %}
+    <div style="font-size:14px;color:#fca5a5;margin-bottom:4px;">Free version</div>
+    <div style="font-size:12px;color:#64748b;margin-bottom:16px;">Limited to 5 users</div>
+    {% endif %}
+    <form method="POST" action="/manager/settings/license">
+      <div class="form-group">
+        <label>Email Address (used for license)</label>
+        <input type="email" name="email" required placeholder="your@email.com">
+      </div>
+      <div class="form-group">
+        <label>License Key</label>
+        <input type="text" name="license_key" required placeholder="TS-XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX">
+      </div>
+      <button type="submit" class="btn btn-primary">Activate</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="card-label">System Info</div>
+    <table>
+      <tr><td>Mode</td><td>{{ 'Standalone' if standalone_mode else 'Headroom Connected' }}</td></tr>
+      <tr><td>Headroom Status</td><td><span class="status-dot {{ 'online' if headroom_status == 'running' else 'offline' }}"></span>{{ headroom_status }}</td></tr>
+      <tr><td>License Tier</td><td>{{ license_tier|capitalize }}</td></tr>
+      <tr><td>Manager Port</td><td>{{ manager_port }}</td></tr>
+      <tr><td>Total Users</td><td>{{ user_count }} / {{ license_max_users }}</td></tr>
+      <tr><td>Total Savings</td><td class="card-value green" style="font-size:14px;">₹{{ "%.2f"|format(total_savings) }}</td></tr>
+      <tr><td>Poll Interval</td><td>{{ poll_interval }}s</td></tr>
+    </table>
+  </div>
+</div>
+
+{% if not standalone_mode %}
+<div class="card">
+  <div class="card-label" style="margin-bottom:16px;">How to Point Your Apps</div>
+  <div style="background:#0f172a;padding:16px;border-radius:8px;font-family:monospace;font-size:13px;color:#94a3b8;">
+# Set your base URL to the Headroom proxy:<br>
+export OPENAI_BASE_URL=http://127.0.0.1:8787/v1<br><br>
+# Or for Anthropic:<br>
+export ANTHROPIC_BASE_URL=http://127.0.0.1:8787<br><br>
+# Manager: http://127.0.0.1:3001/manager/
+  </div>
+</div>
+{% endif %}
+
+{% if standalone_mode %}
+<div class="card">
+  <div class="card-label" style="margin-bottom:16px;">Standalone Mode</div>
+  <div style="background:#0f172a;padding:16px;border-radius:8px;font-size:13px;color:#94a3b8;">
+    <p style="margin-bottom:8px;">TokenSaver is running without Headroom. Usage data must be entered manually.</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <a href="/manager/usage/add" class="btn btn-primary btn-sm" style="text-decoration:none;">+ Add Record</a>
+      <a href="/manager/usage/import" class="btn btn-sm" style="background:#334155;color:#e2e8f0;padding:4px 12px;border-radius:8px;text-decoration:none;font-size:12px;">📄 Import CSV</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

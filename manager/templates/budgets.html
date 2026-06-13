@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Budgets{% endblock %}
+{% block heading %}Budgets{% endblock %}
+
+{% block content %}
+<div class="grid">
+  <div class="card">
+    <div class="card-label">Team Budget Spent</div>
+    <div class="card-value blue">₹{{ "%.0f"|format(team_spent) }}</div>
+    <div class="card-sub" style="font-size:12px;color:#64748b;margin-top:4px;">of ₹{{ "%.0f"|format(team_budget_total) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">User Budget Spent</div>
+    <div class="card-value purple">₹{{ "%.0f"|format(user_spent) }}</div>
+    <div class="card-sub" style="font-size:12px;color:#64748b;margin-top:4px;">of ₹{{ "%.0f"|format(user_budget_total) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">At-Risk Users</div>
+    <div class="card-value yellow">{{ at_risk_users }}</div>
+    <div class="card-sub" style="font-size:12px;color:#64748b;margin-top:4px;">>80% budget used</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Over Budget</div>
+    <div class="card-value red">{{ over_budget_users }}</div>
+    <div class="card-sub" style="font-size:12px;color:#64748b;margin-top:4px;">Budget exceeded</div>
+  </div>
+</div>
+
+{% if budget_statuses %}
+<div class="card">
+  <div class="card-label" style="margin-bottom:16px;">User Budget Status</div>
+  <table>
+    <thead><tr><th>User</th><th>Budget</th><th>Spent</th><th>Remaining</th><th>Usage</th></tr></thead>
+    <tbody>
+      {% for b in budget_statuses %}
+      <tr>
+        <td>{{ b.name }}</td>
+        <td>₹{{ "%.0f"|format(b.budget) }}</td>
+        <td>₹{{ "%.2f"|format(b.spent) }}</td>
+        <td>₹{{ "%.2f"|format(b.remaining) }}</td>
+        <td>
+          <div style="background:#0f172a;border-radius:4px;height:8px;width:100px;display:inline-block;overflow:hidden;">
+            <div style="height:100%;width:{{ b.percent }}%;background:{% if b.percent > 100 %}#ef4444{% elif b.percent > 80 %}#eab308{% else %}#22c55e{% endif %};border-radius:4px;"></div>
+          </div>
+          {{ "%.0f"|format(b.percent) }}%
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state"><h3>No budget data</h3><p>Budgets will appear once users start making API calls.</p></div>
+{% endif %}
+{% endblock %}

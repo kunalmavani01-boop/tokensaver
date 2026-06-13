@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Alerts{% endblock %}
+{% block heading %}Alerts{% endblock %}
+
+{% block header_right %}
+<button class="btn btn-primary btn-sm" onclick="document.getElementById('createForm').style.display='block'">+ New Alert</button>
+{% endblock %}
+
+{% block content %}
+<div id="createForm" style="display:none;margin-bottom:24px;">
+  <div class="card">
+    <div class="card-label" style="margin-bottom:16px;">New Alert Rule</div>
+    <form method="POST" action="/manager/alerts/create">
+      <div class="form-group">
+        <label>Alert Name</label>
+        <input type="text" name="name" required placeholder="Alert team when budget is high">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Slack Webhook URL</label>
+          <input type="url" name="slack_webhook" placeholder="https://hooks.slack.com/...">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" name="email" placeholder="manager@company.com">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label><input type="checkbox" name="threshold_50" value="1"> Alert at 50%</label>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox" name="threshold_80" value="1" checked> Alert at 80%</label>
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox" name="threshold_100" value="1" checked> Alert at 100%</label>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">Save Alert</button>
+      <button type="button" class="btn btn-danger btn-sm" onclick="document.getElementById('createForm').style.display='none'">Cancel</button>
+    </form>
+  </div>
+</div>
+
+{% if alerts %}
+<div class="card">
+  <table>
+    <thead><tr><th>Name</th><th>Channel</th><th>50%</th><th>80%</th><th>100%</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for a in alerts %}
+      <tr>
+        <td>{{ a.name }}</td>
+        <td>{% if a.slack_webhook %}Slack{% elif a.email %}Email{% else %}None{% endif %}</td>
+        <td>{{ '✅' if a.threshold_50 else '—' }}</td>
+        <td>{{ '✅' if a.threshold_80 else '—' }}</td>
+        <td>{{ '✅' if a.threshold_100 else '—' }}</td>
+        <td>
+          <form method="POST" action="/manager/alerts/{{ a.id }}/delete" style="display:inline;">
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state"><h3>No alerts configured</h3><p>Set up Slack alerts to get notified when someone exceeds their budget.</p></div>
+{% endif %}
+{% endblock %}

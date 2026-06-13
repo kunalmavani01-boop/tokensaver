@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Add Usage{% endblock %}
+{% block heading %}Add Usage Record{% endblock %}
+
+{% block content %}
+<div style="max-width:640px;margin:0 auto;">
+  <div class="card" style="border-color:#22c55e44;background:linear-gradient(135deg,#1e293b 0%,#1a2332 100%);">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+      <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#22c55e,#16a34a);display:flex;align-items:center;justify-content:center;font-size:20px;">+</div>
+      <div>
+        <div style="font-size:16px;font-weight:600;">New Usage Record</div>
+        <div style="font-size:12px;color:#64748b;">Log an LLM API call and its cost</div>
+      </div>
+    </div>
+
+    <form method="POST" action="/manager/usage/add">
+      <div class="form-row">
+        <div class="form-group">
+          <label>User</label>
+          <select name="user_id" required>
+            <option value="">Select a user...</option>
+            {% for u in users %}
+            <option value="{{ u.id }}">{{ u.name }} ({{ u.email }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Model</label>
+          <select name="model">
+            {% for m in models %}
+            <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+            <option value="custom">Custom...</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Provider</label>
+          <select name="provider">
+            {% for p in providers %}
+            <option value="{{ p }}">{{ p|capitalize }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Cost (₹)</label>
+          <input type="number" name="cost_estimated" step="0.001" min="0" value="0" required placeholder="e.g. 0.05">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tokens Saved</label>
+          <input type="number" name="tokens_saved" min="0" value="0" placeholder="e.g. 500">
+        </div>
+        <div class="form-group">
+          <label>Tokens Before</label>
+          <input type="number" name="tokens_before" min="0" value="0" placeholder="e.g. 1500">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;margin-top:24px;">
+        <button type="submit" class="btn btn-primary" style="flex:1;padding:12px;font-size:15px;">Add Record</button>
+        <a href="/manager/" class="btn" style="flex:1;padding:12px;font-size:15px;background:#334155;color:#e2e8f0;text-align:center;border-radius:8px;text-decoration:none;">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  {% if users|length == 0 %}
+  <div class="card" style="margin-top:16px;border-color:#eab30844;background:linear-gradient(135deg,#1e293b 0%,#1f1a2e 100%);">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="font-size:24px;">⚠️</div>
+      <div>
+        <div style="font-size:14px;color:#eab308;font-weight:600;">No users yet</div>
+        <div style="font-size:12px;color:#94a3b8;">Create a user in the <a href="/manager/users" style="color:#22c55e;">Users page</a> before adding usage records.</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,52 @@
+services:
+  headroom:
+    image: python:3.12-slim
+    container_name: tokensaver-headroom
+    ports:
+      - "8787:8787"
+    environment:
+      HEADROOM_REQUIRE_RUST_CORE: "false"
+      HEADROOM_TELEMETRY: "off"
+    working_dir: /app
+    command: >
+      sh -c "pip install headroom-ai && headroom proxy --port 8787 --no-telemetry"
+    restart: unless-stopped
+
+  proxy:
+    build: .
+    container_name: tokensaver-proxy
+    ports:
+      - "8788:8788"
+    environment:
+      TOKENSAVER_PROXY_PORT: "8788"
+      TOKENSAVER_PROXY_UPSTREAM: "https://api.openai.com"
+      TOKENSAVER_DB_PATH: "/app/data/savings.db"
+      TOKENSAVER_CACHE_TTL: "24"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+    volumes:
+      - tokensaver_data:/app/data
+    command: >
+      sh -c "pip install -r /app/requirements.txt && python -m uvicorn proxy.server:app --host 0.0.0.0 --port 8788"
+    restart: unless-stopped
+
+  manager:
+    build: .
+    container_name: tokensaver-manager
+    ports:
+      - "3001:3001"
+    environment:
+      TOKENSAVER_MANAGER_PORT: "3001"
+      HEADROOM_URL: "http://headroom:8787"
+      TOKENSAVER_DB_PATH: "/app/data/savings.db"
+      TOKENSAVER_LICENSE_KEY: "${TOKENSAVER_LICENSE_KEY:-dev-mode}"
+      HEADROOM_REQUIRE_RUST_CORE: "false"
+      HEADROOM_TELEMETRY: "off"
+    volumes:
+      - tokensaver_data:/app/data
+    depends_on:
+      - headroom
+      - proxy
+
+volumes:
+  tokensaver_data:

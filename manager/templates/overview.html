@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block heading %}Overview{% endblock %}
+
+{% block content %}
+<div class="grid">
+  <div class="card">
+    <div class="card-label">Total Savings</div>
+    <div class="card-value green">₹{{ "%.0f"|format(total_savings) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Active Users</div>
+    <div class="card-value blue">{{ user_count }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Teams</div>
+    <div class="card-value purple">{{ team_count }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Models Used</div>
+    <div class="card-value" style="color:#a855f7;">{{ model_count }}</div>
+    <div style="font-size:12px;color:#64748b;margin-top:2px;">Top: {{ top_model }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">License Status</div>
+    <div class="card-value {% if license_valid %}green{% else %}red{% endif %}">{{ "Pro" if license_valid else "Free" }}</div>
+  </div>
+</div>
+
+{% if license_valid %}
+<div class="card" style="margin-bottom: 24px;">
+  <div class="card-label">License</div>
+  <div style="font-size:14px;color:#94a3b8;">
+    {{ license_email }} &middot; Max {{ license_max_users }} users
+  </div>
+</div>
+{% endif %}
+
+{% if not standalone_mode %}
+<div class="grid" style="grid-template-columns: 1fr 1fr;">
+  <div class="card">
+    <div class="card-label">Headroom Proxy</div>
+    <div class="card-value {{ 'green' if headroom_status == 'running' else 'red' }}">
+      <span class="status-dot {{ 'online' if headroom_status == 'running' else 'offline' }}"></span>
+      {{ headroom_status|capitalize }}
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-label">Mode</div>
+    <div class="card-value blue">Connected</div>
+  </div>
+</div>
+{% else %}
+<div class="grid" style="grid-template-columns: 1fr 1fr;">
+  <div class="card" style="border-color:#3b82f644;background:linear-gradient(135deg,#1e293b 0%,#1a1e33 100%);">
+    <div class="card-label">Operating Mode</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3b82f6;box-shadow:0 0 8px #3b82f688;"></span>
+      <span class="card-value blue" style="font-size:22px;">Standalone</span>
+    </div>
+    <div style="font-size:12px;color:#64748b;margin-top:4px;">No Headroom dependency</div>
+  </div>
+  <div class="card" style="border-color:#22c55e44;">
+    <div class="card-label">Data Source</div>
+    {% if recent_records %}
+    <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e88;"></span>
+      <span class="card-value green" style="font-size:22px;">Active</span>
+    </div>
+    {% else %}
+    <div style="margin-top:8px;">
+      <span style="font-size:13px;color:#94a3b8;">No records yet.</span>
+      <a href="/manager/usage/add" style="color:#22c55e;font-size:13px;">Add your first record →</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:24px;">
+  <div class="card">
+    <div class="card-label" style="margin-bottom:16px;">Savings Trend (7 Days)</div>
+    <canvas id="savingsChart" height="200"></canvas>
+  </div>
+  <div class="card">
+    <div class="card-label" style="margin-bottom:16px;">Top Users</div>
+    {% if top_users %}
+    <table>
+      <thead><tr><th>User</th><th>Spend</th><th>7-Day Trend</th></tr></thead>
+      <tbody>
+        {% for u in top_users %}
+        <tr>
+          <td>{{ u.name }}</td>
+          <td class="card-value green" style="font-size:14px;">₹{{ "%.0f"|format(u.cost) }}</td>
+          <td style="width:120px;">
+            {% set user_chart = user_chart_data|selectattr('name', 'equalto', u.name)|first %}
+            {% if user_chart %}
+            <canvas id="spark-{{ loop.index }}" width="100" height="24"></canvas>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state"><p>No user data yet</p></div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-label" style="margin-bottom:16px;">Recent Activity</div>
+  {% if recent_records %}
+  <table>
+    <thead><tr><th>Time</th><th>Model</th><th>Tokens Saved</th><th>Cost Saved</th></tr></thead>
+    <tbody>
+      {% for r in recent_records %}
+      <tr>
+        <td>{{ r.timestamp[:19] }}</td>
+        <td>{{ r.model or 'N/A' }}</td>
+        <td>{{ r.tokens_saved }}</td>
+        <td class="card-value green" style="font-size:14px;">₹{{ "%.4f"|format(r.cost_estimated) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">
+    {% if standalone_mode and license_tier == 'enterprise' %}
+    <h3>No usage records yet</h3>
+    <p>Add your first record manually or import a CSV.</p>
+    <div style="margin-top:16px;display:flex;gap:12px;justify-content:center;">
+      <a href="/manager/usage/add" class="btn btn-primary btn-sm">+ Add Record</a>
+      <a href="/manager/usage/import" class="btn btn-sm" style="background:#334155;color:#e2e8f0;padding:8px 20px;border-radius:8px;text-decoration:none;font-size:14px;">📄 Import CSV</a>
+    </div>
+    {% elif standalone_mode %}
+    <h3>No usage records yet</h3>
+    <p>Upgrade to Enterprise to unlock manual data entry and CSV import.</p>
+    <a href="/manager/settings" class="btn btn-primary btn-sm" style="margin-top:12px;">View Settings</a>
+    {% else %}
+    <p>No activity yet. Point your apps to the Headroom proxy.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ctx = document.getElementById('savingsChart');
+if (ctx) {
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: {{ chart_labels|safe }},
+      datasets: [{
+        label: 'Savings (₹)',
+        data: {{ chart_data|safe }},
+        backgroundColor: '#22c55e44',
+        borderColor: '#22c55e',
+        borderWidth: 2,
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } },
+        y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } }
+      }
+    }
+  });
+}
+{% for u in top_users %}
+{% set user_chart = user_chart_data|selectattr('name', 'equalto', u.name)|first %}
+{% if user_chart %}
+const spark{{ loop.index }} = document.getElementById('spark-{{ loop.index }}');
+if (spark{{ loop.index }}) {
+  new Chart(spark{{ loop.index }}, {
+    type: 'line',
+    data: {
+      labels: {{ chart_labels|safe }},
+      datasets: [{
+        data: {{ user_chart.data }},
+        borderColor: '#22c55e',
+        borderWidth: 2,
+        pointRadius: 0,
+        fill: false
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: { x: { display: false }, y: { display: false } },
+      elements: { point: { radius: 0 } }
+    }
+  });
+}
+{% endif %}
+{% endfor %}
+</script>
+{% endblock %}

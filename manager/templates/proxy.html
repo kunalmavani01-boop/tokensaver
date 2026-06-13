@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Caching Proxy{% endblock %}
+{% block heading %}Caching Proxy{% endblock %}
+
+{% block content %}
+<div class="grid">
+  <div class="card">
+    <div class="card-label">Cache Hits</div>
+    <div class="card-value green">{{ proxy_stats.total_hits }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Cache Misses</div>
+    <div class="card-value yellow">{{ proxy_stats.total_misses }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Hit Rate</div>
+    {% set total = proxy_stats.total_hits + proxy_stats.total_misses %}
+    {% if total > 0 %}
+    <div class="card-value blue">{{ "%.1f"|format(proxy_stats.total_hits / total * 100) }}%</div>
+    {% else %}
+    <div class="card-value blue">—</div>
+    {% endif %}
+  </div>
+  <div class="card">
+    <div class="card-label">Tokens Saved</div>
+    <div class="card-value purple">{{ proxy_stats.tokens_saved }}</div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns: 1fr 1fr;">
+  <div class="card">
+    <div class="card-label" style="margin-bottom:16px;">How It Works</div>
+    <div style="font-size:13px;color:#94a3b8;line-height:1.6;">
+      <p>The TokenSaver Proxy sits between your apps and the LLM API. It caches identical prompts so repeated requests return instantly — saving tokens and cost.</p>
+      <ol style="margin:12px 0 0 20px;">
+        <li>App sends prompt → Proxy hashes it</li>
+        <li>If seen before → return cached response</li>
+        <li>If new → forward to LLM, cache result</li>
+        <li>Dashboard shows tokens &amp; money saved</li>
+      </ol>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-label" style="margin-bottom:16px;">Connect Your Apps</div>
+    <div style="background:#0f172a;padding:16px;border-radius:8px;font-family:monospace;font-size:13px;color:#94a3b8;">
+# Point your OpenAI client to the proxy:<br>
+export OPENAI_BASE_URL=http://127.0.0.1:{{ proxy_port }}/v1<br>
+export OPENAI_API_KEY=sk-your-real-key<br><br>
+# Or in Python:<br>
+client = OpenAI(<br>
+&nbsp;&nbsp;base_url="http://127.0.0.1:{{ proxy_port }}/v1",<br>
+&nbsp;&nbsp;api_key="sk-your-real-key"<br>
+)
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-label" style="margin-bottom:16px;">Cache Stats History</div>
+  {% if proxy_stats.history %}
+  <table>
+    <thead><tr><th>Time</th><th>Hits</th><th>Misses</th><th>Tokens Saved</th><th>Cost Saved</th><th>Total Requests</th></tr></thead>
+    <tbody>
+      {% for s in proxy_stats.history %}
+      <tr>
+        <td>{{ s.timestamp[:19] }}</td>
+        <td class="card-value green" style="font-size:14px;">{{ s.cache_hits }}</td>
+        <td class="card-value yellow" style="font-size:14px;">{{ s.cache_misses }}</td>
+        <td class="card-value purple" style="font-size:14px;">{{ s.tokens_saved }}</td>
+        <td class="card-value green" style="font-size:14px;">₹{{ "%.4f"|format(s.cost_saved) }}</td>
+        <td>{{ s.requests_total }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">
+    <h3>No activity yet</h3>
+    <p>Point your apps to the proxy at :{{ proxy_port }} and send your first request.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Models{% endblock %}
+{% block heading %}Model Usage{% endblock %}
+
+{% block content %}
+<div class="grid">
+  <div class="card">
+    <div class="card-label">Models Used</div>
+    <div class="card-value blue">{{ models|length }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Total Cost</div>
+    <div class="card-value green">₹{{ "%.2f"|format(models|sum(attribute='total_cost')) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Total Tokens Saved</div>
+    <div class="card-value purple">{{ models|sum(attribute='tokens_saved') }}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Total Requests</div>
+    <div class="card-value yellow">{{ models|sum(attribute='requests') }}</div>
+  </div>
+</div>
+
+{% if models %}
+<div class="card">
+  <div class="card-label" style="margin-bottom:16px;">Per-Model Breakdown</div>
+  <table>
+    <thead><tr><th>Model</th><th>Requests</th><th>Total Cost</th><th>Tokens Saved</th><th>Avg Cost/Req</th><th>% of Spend</th></tr></thead>
+    <tbody>
+      {% set total_cost_models = models|sum(attribute='total_cost') %}
+      {% for m in models %}
+      <tr>
+        <td><strong>{{ m.model }}</strong></td>
+        <td>{{ m.requests }}</td>
+        <td class="card-value green" style="font-size:14px;">₹{{ "%.4f"|format(m.total_cost) }}</td>
+        <td>{{ m.tokens_saved }}</td>
+        <td>₹{{ "%.4f"|format(m.avg_cost) }}</td>
+        <td>
+          {% if total_cost_models > 0 %}
+          <div style="background:#0f172a;border-radius:4px;height:8px;width:80px;display:inline-block;overflow:hidden;">
+            <div style="height:100%;width:{{ '%.1f'|format(m.total_cost / total_cost_models * 100) }}%;background:#3b82f6;border-radius:4px;"></div>
+          </div>
+          {{ "%.1f"|format(m.total_cost / total_cost_models * 100) }}%
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <div class="card-label" style="margin-bottom:16px;">Cost Distribution</div>
+  <canvas id="modelChart" height="120"></canvas>
+</div>
+{% else %}
+<div class="empty-state"><h3>No model data yet</h3><p>Usage records will appear here once data flows through the system.</p></div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if models %}
+<script>
+const ctx = document.getElementById('modelChart');
+if (ctx) {
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: [{% for m in models %}'{{ m.model }}',{% endfor %}],
+      datasets: [{
+        data: [{% for m in models %}{{ "%.4f"|format(m.total_cost) }},{% endfor %}],
+        backgroundColor: ['#22c55e','#3b82f6','#eab308','#a855f7','#ef4444','#14b8a6','#f97316','#6366f1'],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'right', labels: { color: '#94a3b8' } } }
+    }
+  });
+}
+</script>
+{% endif %}
+{% endblock %}
