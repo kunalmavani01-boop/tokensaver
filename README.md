@@ -1,35 +1,54 @@
 # TokenSaver
 
-Self-hosted LLM cost governance dashboard. Track who in your team is spending what on AI APIs, set per-user budgets, get Slack alerts, surfacing cache hit rates from the Headroom proxy.
+Self-hosted LLM cost governance stack with **active token saving** — prompt deduplication (exact + semantic), rate limiting, per-user/team budgets, Slack + email alerts, anomaly detection, CSV reports, and per-model cost analytics.
 
-**Free for individuals (≤5 users, MIT). Pro at ₹8,500 / $99 one-time for organizations.**
+**Free for individuals (≤5 users, MIT). Pro at ₹8,500 / $99 one-time for organizations. Enterprise at ₹50,000 / $500 with standalone mode + data ingestion.**
 
 ---
 
 ## Features
 
-- **Per-User Budget Tracking** — Set monthly budgets per user/team, see who's at 50%, 80%, or over budget
-- **Slack Alerts** — Get notified when someone crosses a budget threshold
-- **LLM Cost Dashboard** — Server-rendered HTML with Chart.js graphs — 7 pages: Overview, Users, Teams, Budgets, Alerts, Reports, Settings
-- **Cache Hit Rate Visibility** — Surface Headroom's semantic cache hit/miss rates
+### Save Money
+- **Exact Prompt Caching** — SHA256-hashes every prompt, returns cached response for exact duplicates (retries, refreshes)
+- **Semantic Caching** — sentence-transformers embeddings (cosine similarity ≥0.92) catch near-identical queries — same intent, different wording
+- **14-Model Pricing Table** — GPT-4o, Claude 3.5 Sonnet, Gemini 1.5 Pro, Llama 3, and 10 more — accurate cost-per-cache-hit estimates
+
+### Control Usage
+- **Rate Limiting** — Per-API-key request cap with rolling window (configurable requests / seconds)
+- **Per-User Budgets** — Set monthly budgets, see who's at 50%, 80%, or over budget
 - **Anomaly Detection** — Rolling 24h std-dev detection for cost spikes and compression drops
-- **CSV Reports** — Export usage, budget, and anomaly reports
-- **License Key System** — SHA256-verified Pro keys for unlimited users
-- **One Docker Image** — Headroom + Manager in a single stack
+
+### Stay Informed
+- **Slack Alerts** — Automatic notifications at 50% / 80% / 100% of budget
+- **Email Alerts** — SMTP-based budget threshold emails (works with Gmail, SendGrid, any SMTP)
+- **Model Analytics** — Per-model cost breakdown with donut chart
+- **Per-User Spend Charts** — 7-day usage sparklines for every user
+
+### Export & Integrate
+- **CSV Reports** — Usage, budget, and anomaly reports
+- **Data Ingestion** — Add usage records via form, CSV upload, or JSON API (Enterprise)
+- **OpenAI-Compatible** — Drop-in replacement for `https://api.openai.com` — just change your `base_url`
 
 ---
 
 ## Architecture
 
 ```
-Your Apps → Headroom (:8787) → OpenAI / Anthropic
-               ↓ polls /stats+/metrics every 60s
-        TokenSaver Manager (:3001)
-        ├── Per-user budgets & tracking
-        ├── Slack/webhook alerts
-        ├── CSV report exports
-        ├── Anomaly detection
-        └── License verification
+Your Apps → Caching Proxy (:8788) → OpenAI / Anthropic / any LLM API
+                │
+                ├── Exact-match cache (SHA256 hash)
+                ├── Semantic cache (embedding similarity)
+                ├── Rate limiting (per API key)
+                └── Stats report every 5 min
+                     │
+                TokenSaver Manager (:3001)
+                ├── Per-user budgets
+                ├── Slack + email alerts
+                ├── Model cost analytics
+                ├── Anomaly detection
+                ├── CSV report exports
+                ├── License verification
+                └── Usage dashboard (9 pages)
 ```
 
 ---
@@ -37,32 +56,41 @@ Your Apps → Headroom (:8787) → OpenAI / Anthropic
 ## Quick Start
 
 ### Prerequisites
-
 - Python >= 3.10
-- Headroom (`pip install headroom`)
+- `pip install -r requirements.txt`
 - Docker (optional)
 
-### Run Natively
+### Native (Windows PowerShell)
+```powershell
+.\start_tokensaver.ps1
+```
+Opens: http://127.0.0.1:3001/manager/
 
+### Native (Linux / macOS)
 ```bash
-pip install -r requirements.txt
-export HEADROOM_REQUIRE_RUST_CORE=false
-headroom proxy --port 8787 --no-telemetry &
-uvicorn manager.server:app --host 0.0.0.0 --port 3001
+./start.sh
 ```
 
-Open http://127.0.0.1:3001/manager/
-
-### Run with Docker
-
+### Docker
 ```bash
 docker-compose up
+```
+
+### Connect Your Apps
+Point any OpenAI-compatible client to the Caching Proxy:
+```python
+from openai import OpenAI
+client = OpenAI(
+    base_url="http://localhost:8788/v1",  # ← TokenSaver proxy
+    api_key="sk-your-real-api-key"
+)
 ```
 
 ---
 
 ## Configuration
 
+### Manager
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `TOKENSAVER_MANAGER_PORT` | `3001` | Manager web UI port |
@@ -72,16 +100,35 @@ docker-compose up
 | `TOKENSAVER_LICENSE_KEY` | `dev-mode` | License signing secret (set a strong random value in production!) |
 | `TOKENSAVER_STANDALONE` | `false` | Enable standalone mode (Enterprise, no Headroom) |
 | `SLACK_WEBHOOK_URL` | `` | Default Slack webhook |
+| `TOKENSAVER_SMTP_HOST` | `` | SMTP server hostname (enables email alerts) |
+| `TOKENSAVER_SMTP_PORT` | `587` | SMTP port |
+| `TOKENSAVER_SMTP_USER` | `` | SMTP username |
+| `TOKENSAVER_SMTP_PASSWORD` | `` | SMTP password |
+| `TOKENSAVER_SMTP_FROM` | `tokensaver@localhost` | From address for alert emails |
 | `HEADROOM_REQUIRE_RUST_CORE` | `false` | Disable Rust core requirement |
 | `HEADROOM_TELEMETRY` | `off` | Disable telemetry |
+
+### Caching Proxy
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TOKENSAVER_PROXY_PORT` | `8788` | Proxy server port |
+| `TOKENSAVER_PROXY_UPSTREAM` | `https://api.openai.com` | Upstream LLM API |
+| `TOKENSAVER_CACHE_TTL` | `24` | Cache entry TTL (hours) |
+| `TOKENSAVER_SEMANTIC_THRESHOLD` | `0.92` | Cosine similarity threshold for semantic cache |
+| `TOKENSAVER_RATE_LIMIT_REQUESTS` | `0` | Max requests per window (0 = unlimited) |
+| `TOKENSAVER_RATE_LIMIT_WINDOW` | `60` | Rate limit window (seconds) |
+| `OPENAI_API_KEY` | `` | Default upstream API key |
+| `ANTHROPIC_API_KEY` | `` | Alternative upstream API key |
 
 ---
 
 ## License & Pricing
 
-**Free (MIT)** — Individuals, ≤5 users. No registration needed.
-
-**Pro (₹8,500 / $99)** — Unlimited users + Slack alerts + CSV reports + 1yr updates.
+| Tier | Price | Users | Features |
+|------|-------|-------|----------|
+| **Free** | MIT | ≤5 | All features. No registration needed. |
+| **Pro** | ₹8,500 / $99 | Unlimited | All features + unlimited users + 1yr updates |
+| **Enterprise** | ₹50,000 / $500 | Unlimited | All features + standalone mode + data ingestion (form, CSV, JSON API) |
 
 To purchase: email `kunalmavani@outlook.com` with your team size. Pay via UPI to `9836050235` — you'll receive a license key within 1 hour.
 
@@ -92,23 +139,31 @@ To purchase: email `kunalmavani@outlook.com` with your team size. Pay via UPI to
 ```
 tokensaver/
 ├── manager/
-│   ├── server.py            # FastAPI app (port 3001)
-│   ├── database.py          # SQLite CRUD
+│   ├── server.py            # FastAPI app (port 3001) — 9 pages, 8 APIs
+│   ├── database.py          # SQLite CRUD — 8 tables
 │   ├── models.py            # Pydantic models
 │   ├── config.py            # Env var config
 │   ├── headroom_client.py   # Async Headroom poller
-│   ├── budget_engine.py    # Budget tracking
-│   ├── alerts.py            # Slack dispatch
+│   ├── budget_engine.py     # Budget tracking
+│   ├── alerts.py            # Slack + email dispatch
+│   ├── email_alerts.py      # SMTP email alerts
 │   ├── anomaly.py           # Std-dev anomaly detection
 │   ├── license.py           # License key system
-│   ├── reports.py           # CSV exports
-│   └── templates/           # 8 Jinja2 templates
+│   ├── ingestion.py         # Data ingestion (Enterprise)
+│   ├── reports.py           # CSV exports + dashboard stats
+│   └── templates/           # 12 Jinja2 templates
+├── proxy/
+│   ├── server.py            # Caching proxy FastAPI app (port 8788)
+│   ├── cache.py             # SHA256 + semantic cache, rate limiting, pricing
+│   ├── config.py            # Proxy env var config
+│   └── models.py            # Pydantic models
 ├── scripts/
 │   ├── gen_license.py       # Generate Pro/Enterprise license keys
 │   └── seed_demo.py         # Seed demo data for testing
-├── docker-compose.yml       # Headroom proxy + Manager
+├── docker-compose.yml       # Headroom + Caching Proxy + Manager
 ├── Dockerfile
 ├── .dockerignore
+├── .env.example
 └── requirements.txt
 ```
 
