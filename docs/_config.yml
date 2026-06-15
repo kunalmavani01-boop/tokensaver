@@ -1,0 +1,7 @@
+theme: jekyll-theme-minimal
+title: TokenSaver
+description: Self-hosted LLM cost governance with prompt caching, rate limiting, and budget management
+logo: https://github.com/kunalmavani01-boop.png
+show_downloads: true
+github_is_project_page: true
+github_project_repo_url: https://github.com/kunalmavani01-boop/tokensaver
