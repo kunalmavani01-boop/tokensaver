@@ -14,7 +14,7 @@ from .cache import (
     init_cache_db, get_cache_key, check_cache, set_cache,
     record_cache_hit, get_cache_stats, estimate_cost,
     check_semantic_cache, compute_embedding, messages_to_text,
-    check_rate_limit,
+    check_rate_limit, record_proxy_request,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ def get_manager_url() -> str:
     global _manager_url
     if _manager_url is None:
         port = os.environ.get("TOKENSAVER_MANAGER_PORT", "3001")
-        _manager_url = os.environ.get("TOKENSAVER_MANAGER_URL", f"http://127.0.0.1:{port}")
+        _manager_url = config.manager_url or f"http://127.0.0.1:{port}"
     return _manager_url
 
 
@@ -45,12 +45,13 @@ async def periodic_report_stats():
             async with httpx.AsyncClient(timeout=10) as client:
                 await client.post(
                     f"{manager_url}/manager/api/proxy/stats/json",
+                    headers=_internal_headers(),
                     json={
-                        "cache_hits": stats["total_cache_hits"],
-                        "cache_misses": 0,
-                        "tokens_saved": stats["tokens_saved"],
-                        "cost_saved": stats["estimated_cost_saved"],
-                        "total_requests": stats["total_cache_hits"],
+                        "cache_hits": stats["cache_hit_events"],
+                        "cache_misses": stats["cache_miss_events"],
+                        "tokens_saved": stats["runtime_tokens_saved"],
+                        "cost_saved": stats["runtime_cost_saved"],
+                        "total_requests": stats["request_count"],
                     }
                 )
         except Exception as e:
@@ -112,42 +113,72 @@ async def chat_completions(request: Request):
             media_type="text/event-stream"
         )
 
-    return await _cached_completion(model, messages, body)
+    return await _cached_completion(request, model, messages, body)
 
 
-async def _cached_completion(model: str, messages: list, body: dict) -> JSONResponse:
+async def _cached_completion(request: Request, model: str, messages: list, body: dict) -> JSONResponse:
     cache_key = get_cache_key(messages, model)
+    identity = _extract_identity(request)
 
     # 1. Exact hash match
     cached = check_cache(cache_key)
     if cached:
         record_cache_hit(cache_key)
+        tokens_saved = cached["prompt_tokens"] + cached["completion_tokens"]
+        cost_saved = estimate_cost(model, cached["prompt_tokens"], cached["completion_tokens"])
+        record_proxy_request(cache_hit=True, tokens_saved=tokens_saved, cost_saved=cost_saved)
         response_data = json.loads(cached["response"])
         response_data["cached"] = True
         response_data["cache_info"] = {
             "match": "exact",
             "hit_count": cached["hit_count"] + 1,
-            "tokens_saved": cached["prompt_tokens"] + cached["completion_tokens"],
-            "cost_saved": estimate_cost(model, cached["prompt_tokens"], cached["completion_tokens"]),
+            "tokens_saved": tokens_saved,
+            "cost_saved": cost_saved,
         }
+        await _record_usage_event(
+            identity=identity,
+            model=model,
+            endpoint="/v1/chat/completions",
+            prompt_tokens=cached["prompt_tokens"],
+            completion_tokens=cached["completion_tokens"],
+            tokens_saved=tokens_saved,
+            cost_estimated=cost_saved,
+            cache_hits=1,
+            provider=_infer_provider(model),
+        )
         return JSONResponse(content=response_data)
 
     # 2. Semantic match (embedding similarity)
     semantic = check_semantic_cache(messages, model)
     if semantic:
         record_cache_hit(semantic["cache_key"])
+        tokens_saved = semantic["prompt_tokens"] + semantic["completion_tokens"]
+        cost_saved = estimate_cost(model, semantic["prompt_tokens"], semantic["completion_tokens"])
+        record_proxy_request(cache_hit=True, tokens_saved=tokens_saved, cost_saved=cost_saved)
         response_data = json.loads(semantic["response"])
         response_data["cached"] = True
         response_data["cache_info"] = {
             "match": "semantic",
             "hit_count": semantic["hit_count"] + 1,
-            "tokens_saved": semantic["prompt_tokens"] + semantic["completion_tokens"],
-            "cost_saved": estimate_cost(model, semantic["prompt_tokens"], semantic["completion_tokens"]),
+            "tokens_saved": tokens_saved,
+            "cost_saved": cost_saved,
         }
+        await _record_usage_event(
+            identity=identity,
+            model=model,
+            endpoint="/v1/chat/completions",
+            prompt_tokens=semantic["prompt_tokens"],
+            completion_tokens=semantic["completion_tokens"],
+            tokens_saved=tokens_saved,
+            cost_estimated=cost_saved,
+            cache_hits=1,
+            provider=_infer_provider(model),
+        )
         return JSONResponse(content=response_data)
 
     # 3. Cache miss — forward to upstream
     result = await _forward_to_upstream(model, messages, body)
+    record_proxy_request(cache_hit=False)
 
     if result and "usage" in result:
         usage = result["usage"]
@@ -155,11 +186,27 @@ async def _cached_completion(model: str, messages: list, body: dict) -> JSONResp
         set_cache(cache_key, "", model, json.dumps(result),
                   usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0),
                   embedding=emb)
+        await _record_usage_event(
+            identity=identity,
+            model=model,
+            endpoint="/v1/chat/completions",
+            prompt_tokens=usage.get("prompt_tokens", 0),
+            completion_tokens=usage.get("completion_tokens", 0),
+            tokens_saved=0,
+            cost_estimated=estimate_cost(
+                model,
+                usage.get("prompt_tokens", 0),
+                usage.get("completion_tokens", 0),
+            ),
+            cache_hits=0,
+            provider=_infer_provider(model),
+        )
 
     return JSONResponse(content=result)
 
 
 async def _proxy_stream(model: str, messages: list, body: dict):
+    record_proxy_request(cache_hit=False)
     async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT) as client:
         headers = _get_headers(model)
         payload = {k: v for k, v in body.items() if k != "stream"}
@@ -179,6 +226,75 @@ def _get_headers(model: str) -> dict:
     else:
         headers["Authorization"] = f"Bearer {config.openai_api_key}"
     return headers
+
+
+def _internal_headers() -> dict:
+    headers = {}
+    if config.internal_token:
+        headers["x-tokensaver-internal-token"] = config.internal_token
+    return headers
+
+
+def _infer_provider(model: str) -> str:
+    lowered = model.lower()
+    if "claude" in lowered:
+        return "anthropic"
+    if "gemini" in lowered:
+        return "google"
+    if "llama" in lowered:
+        return "meta"
+    return "openai"
+
+
+def _extract_identity(request: Request) -> dict:
+    return {
+        "user_id": request.headers.get("x-tokensaver-user-id"),
+        "user_email": request.headers.get("x-tokensaver-user-email"),
+        "user_api_key": request.headers.get("x-tokensaver-user-api-key"),
+        "team_id": request.headers.get("x-tokensaver-team-id"),
+    }
+
+
+async def _record_usage_event(
+    *,
+    identity: dict,
+    model: str,
+    endpoint: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    tokens_saved: int,
+    cost_estimated: float,
+    cache_hits: int,
+    provider: str,
+) -> None:
+    if not any(identity.values()):
+        return
+    if cache_hits > 0:
+        tokens_before = tokens_saved
+        tokens_after = 0
+    else:
+        tokens_before = prompt_tokens + completion_tokens
+        tokens_after = prompt_tokens + completion_tokens
+    payload = {
+        **identity,
+        "model": model,
+        "provider": provider,
+        "endpoint": endpoint,
+        "tokens_before": tokens_before,
+        "tokens_after": tokens_after,
+        "tokens_saved": tokens_saved,
+        "cost_estimated": cost_estimated,
+        "cache_hits": cache_hits,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(
+                f"{get_manager_url()}/manager/api/proxy/usage",
+                headers=_internal_headers(),
+                json=payload,
+            )
+    except Exception as e:
+        logger.debug("Failed to record usage event: %s", e)
 
 
 async def _forward_to_upstream(model: str, messages: list, body: dict) -> dict:

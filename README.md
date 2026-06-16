@@ -2,7 +2,7 @@
 
 Self-hosted LLM cost governance stack with **active token saving** — prompt deduplication (exact + semantic), rate limiting, per-user/team budgets, Slack + email alerts, anomaly detection, CSV reports, and per-model cost analytics.
 
-**Free for individuals (≤5 users, MIT). Pro at ₹8,500 / $99 one-time for organizations. Enterprise at ₹50,000 / $500 with standalone mode + data ingestion.**
+**Free for individual use (≤5 users) under the included community license. Pro at ₹8,500 / $99 one-time for organizations. Enterprise at ₹50,000 / $500 with standalone mode + data ingestion.**
 
 ---
 
@@ -15,11 +15,11 @@ Self-hosted LLM cost governance stack with **active token saving** — prompt de
 
 ### Control Usage
 - **Rate Limiting** — Per-API-key request cap with rolling window (configurable requests / seconds)
-- **Per-User Budgets** — Set monthly budgets, see who's at 50%, 80%, or over budget
+- **Per-User Budgets** — Set monthly budgets, see who's at 50%, 80%, or over budget when requests are attributed to users
 - **Anomaly Detection** — Rolling 24h std-dev detection for cost spikes and compression drops
 
 ### Stay Informed
-- **Slack Alerts** — Automatic notifications at 50% / 80% / 100% of budget
+- **Slack Alerts** — Automatic notifications at 50% / 80% / 100% of attributed budget usage
 - **Email Alerts** — SMTP-based budget threshold emails (works with Gmail, SendGrid, any SMTP)
 - **Model Analytics** — Per-model cost breakdown with donut chart
 - **Per-User Spend Charts** — 7-day usage sparklines for every user
@@ -86,6 +86,16 @@ client = OpenAI(
 )
 ```
 
+### Attribute Requests To Users
+If you want live per-user budgets, alerts, and analytics from proxy traffic, send one of these headers with each request:
+
+- `X-TokenSaver-User-Id`
+- `X-TokenSaver-User-Email`
+- `X-TokenSaver-User-Api-Key`
+- optional `X-TokenSaver-Team-Id`
+
+TokenSaver uses these headers for internal attribution only and does not forward them upstream.
+
 ---
 
 ## Configuration
@@ -105,6 +115,7 @@ client = OpenAI(
 | `TOKENSAVER_SMTP_USER` | `` | SMTP username |
 | `TOKENSAVER_SMTP_PASSWORD` | `` | SMTP password |
 | `TOKENSAVER_SMTP_FROM` | `tokensaver@localhost` | From address for alert emails |
+| `TOKENSAVER_INTERNAL_TOKEN` | `` | Optional shared token for proxy-to-manager internal APIs |
 | `HEADROOM_REQUIRE_RUST_CORE` | `false` | Disable Rust core requirement |
 | `HEADROOM_TELEMETRY` | `off` | Disable telemetry |
 
@@ -126,7 +137,7 @@ client = OpenAI(
 
 | Tier | Price | Users | Features |
 |------|-------|-------|----------|
-| **Free** | MIT | ≤5 | All features. No registration needed. |
+| **Free** | Community license | ≤5 | Individual use, evaluation, and local testing. |
 | **Pro** | ₹8,500 / $99 | Unlimited | All features + unlimited users + 1yr updates |
 | **Enterprise** | ₹50,000 / $500 | Unlimited | All features + standalone mode + data ingestion (form, CSV, JSON API) |
 
@@ -171,4 +182,4 @@ tokensaver/
 
 ## License
 
-MIT License — Copyright (c) 2026 Kunal. Pro features require a paid license for organizations.
+TokenSaver is distributed under the included TokenSaver Community License. Individual use is free. Organizational use requires a paid commercial license.

@@ -19,7 +19,7 @@ from .database import (
     get_user_count, get_team_count, get_total_savings,
     insert_usage, record_proxy_stats, get_proxy_stats,
     get_model_breakdown, get_user_daily_usage,
-    UserCreate, TeamCreate, BudgetAlertCreate,
+    resolve_usage_identity, UserCreate, TeamCreate, BudgetAlertCreate,
 )
 from .headroom_client import get_headroom_status, periodic_poll, poll_and_store
 from .budget_engine import get_budget_summary
@@ -44,6 +44,14 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 # Background task reference
 _poller_task: Optional[asyncio.Task] = None
+
+
+def _verify_internal_request(request: Request) -> None:
+    if not config.internal_token:
+        return
+    received = request.headers.get("x-tokensaver-internal-token", "")
+    if received != config.internal_token:
+        raise HTTPException(status_code=403, detail="Invalid internal token")
 
 def get_license_tier() -> str:
     """Determine license tier: free, pro, or enterprise."""
@@ -475,7 +483,8 @@ async def api_proxy_stats(hits: int = 0, misses: int = 0, tokens_saved: int = 0,
     return {"status": "recorded"}
 
 @app.post("/manager/api/proxy/stats/json")
-async def api_proxy_stats_json(data: Dict[str, Any]):
+async def api_proxy_stats_json(request: Request, data: Dict[str, Any]):
+    _verify_internal_request(request)
     record_proxy_stats(
         hits=data.get("cache_hits", 0),
         misses=data.get("cache_misses", 0),
@@ -484,6 +493,35 @@ async def api_proxy_stats_json(data: Dict[str, Any]):
         total=data.get("total_requests", 0)
     )
     return {"status": "recorded"}
+
+
+@app.post("/manager/api/proxy/usage")
+async def api_proxy_usage(request: Request, data: Dict[str, Any]):
+    _verify_internal_request(request)
+    identity = resolve_usage_identity(
+        user_id=data.get("user_id"),
+        email=data.get("user_email"),
+        api_key=data.get("user_api_key"),
+        team_id=data.get("team_id"),
+    )
+    insert_usage(
+        {
+            "timestamp": data.get("timestamp"),
+            "user_id": identity["user_id"],
+            "team_id": identity["team_id"],
+            "model": data.get("model"),
+            "provider": data.get("provider"),
+            "endpoint": data.get("endpoint", "/v1/chat/completions"),
+            "tokens_before": data.get("tokens_before", 0),
+            "tokens_after": data.get("tokens_after", 0),
+            "tokens_saved": data.get("tokens_saved", 0),
+            "cost_estimated": data.get("cost_estimated", 0.0),
+            "cache_hits": data.get("cache_hits", 0),
+        }
+    )
+    if identity["user_id"] is not None:
+        await check_and_alert()
+    return {"status": "recorded", "user_id": identity["user_id"], "team_id": identity["team_id"]}
 
 @app.get("/manager/api/proxy/stats")
 async def api_get_proxy_stats():

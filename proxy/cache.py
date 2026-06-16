@@ -81,6 +81,12 @@ def init_cache_db():
             timestamp REAL NOT NULL
         )
     """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS proxy_metrics (
+            metric_key TEXT PRIMARY KEY,
+            metric_value REAL NOT NULL DEFAULT 0
+        )
+    """)
     c.execute("CREATE INDEX IF NOT EXISTS idx_rate_limits_id_ts ON rate_limits(identifier, timestamp)")
     c.execute("CREATE INDEX IF NOT EXISTS idx_cache_expires ON prompt_cache(expires_at)")
     conn.commit()
@@ -211,6 +217,8 @@ def get_cache_stats() -> Dict[str, Any]:
     cached = dict(c.fetchone())
     c.execute("SELECT COUNT(*) as semantic FROM prompt_cache WHERE embedding IS NOT NULL")
     sem = dict(c.fetchone())
+    c.execute("SELECT metric_key, metric_value FROM proxy_metrics")
+    metrics = {row["metric_key"]: row["metric_value"] for row in c.fetchall()}
     conn.close()
     tokens_saved = tokens.get("tokens_saved", 0)
     return {
@@ -220,7 +228,36 @@ def get_cache_stats() -> Dict[str, Any]:
         "semantic_entries": sem.get("semantic", 0),
         "tokens_saved": tokens_saved,
         "estimated_cost_saved": tokens_saved * 0.000003,
+        "request_count": int(metrics.get("requests_total", 0)),
+        "cache_hit_events": int(metrics.get("cache_hits_total", 0)),
+        "cache_miss_events": int(metrics.get("cache_misses_total", 0)),
+        "runtime_tokens_saved": int(metrics.get("tokens_saved_total", 0)),
+        "runtime_cost_saved": float(metrics.get("cost_saved_total", 0.0)),
     }
+
+
+def increment_proxy_metric(metric_key: str, amount: float = 1) -> None:
+    conn = sqlite3.connect(str(DB_PATH))
+    c = conn.cursor()
+    c.execute(
+        """
+        INSERT INTO proxy_metrics (metric_key, metric_value)
+        VALUES (?, ?)
+        ON CONFLICT(metric_key) DO UPDATE SET metric_value = metric_value + excluded.metric_value
+        """,
+        (metric_key, amount),
+    )
+    conn.commit()
+    conn.close()
+
+
+def record_proxy_request(cache_hit: bool, tokens_saved: int = 0, cost_saved: float = 0.0) -> None:
+    increment_proxy_metric("requests_total", 1)
+    increment_proxy_metric("cache_hits_total" if cache_hit else "cache_misses_total", 1)
+    if tokens_saved > 0:
+        increment_proxy_metric("tokens_saved_total", tokens_saved)
+    if cost_saved > 0:
+        increment_proxy_metric("cost_saved_total", cost_saved)
 
 
 def estimate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:

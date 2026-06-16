@@ -154,6 +154,14 @@ def get_user_by_email(email: str) -> Optional[User]:
             return User(**dict(row))
     return None
 
+def get_user_by_api_key(api_key: str) -> Optional[User]:
+    with get_db() as c:
+        c.execute("SELECT * FROM users WHERE api_key = ?", (api_key,))
+        row = c.fetchone()
+        if row:
+            return User(**dict(row))
+    return None
+
 def get_all_users() -> List[User]:
     with get_db() as c:
         c.execute("SELECT * FROM users ORDER BY name")
@@ -204,6 +212,43 @@ def insert_usage(record: Dict[str, Any]):
              record.get('tokens_saved', 0), record.get('cost_estimated', 0.0),
              record.get('cache_hits', 0))
         )
+
+def resolve_usage_identity(
+    user_id: Optional[int] = None,
+    email: Optional[str] = None,
+    api_key: Optional[str] = None,
+    team_id: Optional[int] = None,
+) -> Dict[str, Optional[int]]:
+    resolved_user = None
+    normalized_user_id = None
+    normalized_team_id = None
+
+    if user_id not in (None, ""):
+        try:
+            normalized_user_id = int(user_id)
+        except (TypeError, ValueError):
+            normalized_user_id = None
+    if team_id not in (None, ""):
+        try:
+            normalized_team_id = int(team_id)
+        except (TypeError, ValueError):
+            normalized_team_id = None
+
+    if normalized_user_id is not None:
+        resolved_user = get_user(normalized_user_id)
+    elif email:
+        resolved_user = get_user_by_email(email)
+    elif api_key:
+        resolved_user = get_user_by_api_key(api_key)
+
+    resolved_team_id = normalized_team_id
+    if resolved_user:
+        resolved_team_id = resolved_user.team_id
+
+    return {
+        "user_id": resolved_user.id if resolved_user else normalized_user_id,
+        "team_id": resolved_team_id,
+    }
 
 def get_user_usage(user_id: int, days: int = 30) -> List[Dict]:
     with get_db() as c:

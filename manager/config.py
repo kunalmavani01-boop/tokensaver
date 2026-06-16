@@ -17,6 +17,7 @@ class Config:
     smtp_user: str = os.environ.get("TOKENSAVER_SMTP_USER", "")
     smtp_password: str = os.environ.get("TOKENSAVER_SMTP_PASSWORD", "")
     smtp_from: str = os.environ.get("TOKENSAVER_SMTP_FROM", "tokensaver@localhost")
+    internal_token: str = os.environ.get("TOKENSAVER_INTERNAL_TOKEN", "")
 
     def __post_init__(self):
         self.db_path.parent.mkdir(parents=True, exist_ok=True)

@@ -11,6 +11,8 @@ class ProxyConfig:
     semantic_threshold: float = float(os.environ.get("TOKENSAVER_SEMANTIC_THRESHOLD", "0.92"))
     openai_api_key: str = os.environ.get("OPENAI_API_KEY", "")
     anthropic_api_key: str = os.environ.get("ANTHROPIC_API_KEY", "")
+    manager_url: str = os.environ.get("TOKENSAVER_MANAGER_URL", "")
+    internal_token: str = os.environ.get("TOKENSAVER_INTERNAL_TOKEN", "")
 
     rate_limit_requests: int = int(os.environ.get("TOKENSAVER_RATE_LIMIT_REQUESTS", "0"))
     rate_limit_window_seconds: int = int(os.environ.get("TOKENSAVER_RATE_LIMIT_WINDOW", "60"))

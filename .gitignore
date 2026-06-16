@@ -11,3 +11,4 @@ build/
 Thumbs.db
 data/
 *.db
+.pytest_cache/
