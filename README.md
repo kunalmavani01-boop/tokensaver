@@ -76,6 +76,10 @@ Opens: http://127.0.0.1:3001/manager/
 docker-compose up
 ```
 
+## Downloads
+
+Tagged releases publish a source archive in GitHub Releases. Use that if you want a packaged copy instead of cloning the repo.
+
 ### Connect Your Apps
 Point any OpenAI-compatible client to the Caching Proxy:
 ```python
